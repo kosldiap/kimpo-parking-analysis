@@ -50,11 +50,11 @@ def fetch_month(ym: str, line: str, retries: int = 3):
             time.sleep(1.0 + a)
 
 
-def _agg(rows, t_type):
-    """A/B/C 타입의 도착+출발 합산 → 24시간 배열."""
+def _agg(rows, t_type, io):
+    """T_TYPE(A운항/B여객/C화물) × T_IO(I도착/O출발) → 24시간 배열."""
     out = [0] * 24
     for r in rows:
-        if r.get("T_TYPE") == t_type:
+        if r.get("T_TYPE") == t_type and r.get("T_IO") == io:
             for h in range(1, 25):
                 out[h - 1] += int(r.get(f"T_T{h}", 0) or 0)
     return out
@@ -66,16 +66,19 @@ def collect(delay: float = 0.3) -> pd.DataFrame:
     t0 = time.time()
     for p in months:
         ym = f"{p.year}{p.month:02d}"
-        ndays = p.days_in_month
+        nd = p.days_in_month
         for line, nm in LINES.items():
             data = fetch_month(ym, line)
             if not data:
                 continue
-            fl = _agg(data, "A"); pax = _agg(data, "B"); cg = _agg(data, "C")
+            fa, fd = _agg(data, "A", "I"), _agg(data, "A", "O")  # 운항 도착/출발
+            pa, pd_ = _agg(data, "B", "I"), _agg(data, "B", "O")  # 여객 도착/출발
+            ca, cd = _agg(data, "C", "I"), _agg(data, "C", "O")  # 화물 도착/출발
             for h in range(24):
                 recs.append({"ym": ym, "line": nm, "hour": h,
-                             "flights": fl[h] / ndays, "pax": pax[h] / ndays,
-                             "cargo_ton": cg[h] / 1000 / ndays})
+                             "flights_arr": fa[h] / nd, "flights_dep": fd[h] / nd,
+                             "pax_arr": pa[h] / nd, "pax_dep": pd_[h] / nd,
+                             "cargo_arr_ton": ca[h] / 1000 / nd, "cargo_dep_ton": cd[h] / 1000 / nd})
             time.sleep(delay)
         print(f"  {ym} 완료 ({time.time()-t0:.0f}s)", flush=True)
     return pd.DataFrame(recs)
@@ -88,9 +91,9 @@ def main():
     out = EXTERNAL_DIR / "flights_hourly_profile.csv"
     df.to_csv(out, index=False, encoding="utf-8-sig")
     print(f"\n저장: {out}  ({len(df):,}행)")
-    # 검증용: 국내선 시간대 운항/여객 평균 프로파일
-    piv = df[df["line"] == "국내선"].groupby("hour")[["flights", "pax"]].mean().round(1)
-    print("\n국내선 시간대별 일평균 (운항편/여객명):")
+    # 검증용: 국내선 시간대 출발/도착 여객 프로파일
+    piv = df[df["line"] == "국내선"].groupby("hour")[["pax_dep", "pax_arr"]].mean().round(0)
+    print("\n국내선 시간대별 일평균 여객 (출발/도착):")
     print(piv.to_string())
 
 

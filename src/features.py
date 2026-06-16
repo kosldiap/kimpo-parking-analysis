@@ -215,26 +215,30 @@ def merge_hourly_flights(df: pd.DataFrame) -> pd.DataFrame:
         print(f"  [skip] 시간대 항공 프로파일 없음 → {fpath}")
         return df
     hp = pd.read_csv(fpath, dtype={"ym": int})
+    hp["cargo_ton"] = hp["cargo_dep_ton"] + hp["cargo_arr_ton"]  # 화물 양방향
 
+    # 주차는 출발(dep)여객이 2h 선행 유발(교차상관 검증). 도착은 마중→주차 무관.
     def _line(nm):
-        d = hp[hp["line"] == nm][["ym", "hour", "flights", "pax", "cargo_ton"]].sort_values(["ym", "hour"]).copy()
-        d["pax_lead2"] = d.groupby("ym")["pax"].shift(-2).fillna(0)
+        d = hp[hp["line"] == nm].sort_values(["ym", "hour"]).copy()
+        d["dep_lead2"] = d.groupby("ym")["pax_dep"].shift(-2).fillna(0)
         return d
     dom, intl = _line("국내선"), _line("국제선")
     tot = hp.groupby(["ym", "hour"], as_index=False).agg(
-        flights=("flights", "sum"), pax=("pax", "sum"), cargo_ton=("cargo_ton", "sum"))
-    tot["pax_lead2"] = tot.sort_values(["ym", "hour"]).groupby("ym")["pax"].shift(-2).fillna(0)
+        pax_dep=("pax_dep", "sum"), pax_arr=("pax_arr", "sum"),
+        flights_dep=("flights_dep", "sum"), cargo_ton=("cargo_ton", "sum"))
+    tot["dep_lead2"] = tot.sort_values(["ym", "hour"]).groupby("ym")["pax_dep"].shift(-2).fillna(0)
 
     def _cat(d, cat):
         return pd.DataFrame({"ym": d["ym"], "hour": d["hour"], "category": cat,
-                             "f_flights_h": d["flights"], "f_pax_h": d["pax"],
-                             "f_pax_lead2": d["pax_lead2"], "f_cargo_h": d["cargo_ton"]})
+                             "f_dep_pax_h": d["pax_dep"], "f_dep_pax_lead2": d["dep_lead2"],
+                             "f_dep_flights_h": d["flights_dep"], "f_arr_pax_h": d["pax_arr"],
+                             "f_cargo_h": d["cargo_ton"]})
     long = pd.concat([_cat(dom, "국내선"), _cat(intl, "국제선"),
                       _cat(tot, "화물"), _cat(tot, "직원")], ignore_index=True)
 
     df["ym"] = df["datetime"].dt.year * 100 + df["datetime"].dt.month
     df = df.merge(long, on=["ym", "hour", "category"], how="left").drop(columns="ym")
-    print(f"  시간대 항공 결합: {fpath.name} → f_flights_h/f_pax_h/f_pax_lead2/f_cargo_h")
+    print(f"  시간대 항공 결합: {fpath.name} → f_dep_pax_h/f_dep_pax_lead2/f_dep_flights_h/f_arr_pax_h/f_cargo_h")
     return df
 
 
