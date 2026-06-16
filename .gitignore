@@ -16,6 +16,9 @@ output/
 *.pdf
 *.html
 
+# ===== PC별 로컬 설정 (경로 등) =====
+src/data_dir.local.txt
+
 # ===== 임시 파일 =====
 _*
 ~$*
