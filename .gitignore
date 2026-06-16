@@ -16,6 +16,10 @@ output/
 *.pdf
 *.html
 
+# 단, 보고서용 대표 그래프는 저장소에 포함
+!reports/figures/
+!reports/figures/*.png
+
 # ===== PC별 로컬 설정 (경로 등) =====
 src/data_dir.local.txt
 
