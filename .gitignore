@@ -1,0 +1,38 @@
+# ===== 원본 데이터 (절대 커밋 금지: 대용량 + 개인정보) =====
+*.xls
+*.xlsx
+*.xlsm
+*.csv
+*.hwp
+*.hwpx
+data/
+raw/
+교통센터*/
+
+# ===== 분석 산출물 =====
+output/
+*.png
+*.jpg
+*.pdf
+*.html
+
+# ===== 임시 파일 =====
+_*
+~$*
+*.tmp
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+.env
+
+# ===== OS / 에디터 =====
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
