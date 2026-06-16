@@ -89,9 +89,14 @@ KNOWN_MISSING = [
 
 
 def clean_master(master: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
-    """완전중복 제거 + 분석구간 필터."""
+    """완전중복 제거 + 분석구간 필터.
+
+    차량번호(개인정보)가 없는 데이터(예: 향후 정보공개 분)도 동일 작동 —
+    DUP_KEY 중 존재하는 컬럼만 사용. 주차권번호+입출차일시로 충분(차량번호 영향 0.02%).
+    """
     n0 = len(master)
-    m = master.drop_duplicates(DUP_KEY)
+    keys = [c for c in DUP_KEY if c in master.columns]
+    m = master.drop_duplicates(keys)
     n1 = len(m)
     m = m[(m["입차일시"] >= WINDOW_START) & (m["입차일시"] < WINDOW_END)]
     n2 = len(m)
