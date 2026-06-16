@@ -101,26 +101,37 @@ def clean_master(master: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     return m.reset_index(drop=True)
 
 
+# 요금 0원 = 유예시간(~10분) 내 비주차 통행(드롭오프/U턴/만차회차). 전 유형 검증됨.
+# 주차수요(entries)는 요금>0 만 카운트, 0원 통행은 dropoffs로 별도 보존.
+def _is_parking(m: pd.DataFrame) -> pd.Series:
+    return pd.to_numeric(m["요금"], errors="coerce").fillna(0) > 0
+
+
 def build_daily(master: pd.DataFrame) -> pd.DataFrame:
     m = master.dropna(subset=["입차일시"]).copy()
     m["date"] = m["입차일시"].dt.normalize()
-    g = m.groupby(["lot", "date"])
-    daily = g.agg(
+    m["_park"] = _is_parking(m)
+    park = m[m["_park"]]
+    daily = park.groupby(["lot", "date"]).agg(
         entries=("입차일시", "size"),
         revenue=("수입", "sum"),
         fee=("요금", "sum"),
         avg_stay_min=("주차시간_분", "mean"),
     ).reset_index()
-    return daily
+    drop = (m[~m["_park"]].groupby(["lot", "date"]).size()
+            .reset_index(name="dropoffs"))
+    return daily.merge(drop, on=["lot", "date"], how="outer").fillna({"dropoffs": 0, "entries": 0})
 
 
 def build_hourly(master: pd.DataFrame) -> pd.DataFrame:
     m = master.dropna(subset=["입차일시"]).copy()
     m["hour"] = m["입차일시"].dt.floor("h")
-    hourly = (
-        m.groupby(["lot", "hour"]).size().reset_index(name="entries")
-    )
-    return hourly
+    m["_park"] = _is_parking(m)
+    park = (m[m["_park"]].groupby(["lot", "hour"]).size()
+            .reset_index(name="entries"))
+    drop = (m[~m["_park"]].groupby(["lot", "hour"]).size()
+            .reset_index(name="dropoffs"))
+    return park.merge(drop, on=["lot", "hour"], how="outer").fillna(0)
 
 
 def _save_all(master: pd.DataFrame, report: pd.DataFrame | None):

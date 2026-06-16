@@ -37,7 +37,9 @@ WIN_END = pd.Timestamp("2018-12-31 23:00")
 
 def build_occupancy() -> pd.DataFrame:
     tx = pd.read_parquet(config.PROCESSED_DIR / "transactions.parquet",
-                         columns=["lot", "입차일시", "출차일시"])
+                         columns=["lot", "입차일시", "출차일시", "요금"])
+    # 요금 0원(유예시간 내 비주차 통행)은 점유에서 제외
+    tx = tx[pd.to_numeric(tx["요금"], errors="coerce").fillna(0) > 0]
     tx["category"] = tx["lot"].map(config.LOT_TO_CATEGORY)
     full_idx = pd.date_range(WIN_START, WIN_END, freq="h")
     frames = []

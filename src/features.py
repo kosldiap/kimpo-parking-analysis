@@ -53,6 +53,46 @@ def _holiday_set() -> set:
     return days
 
 
+# 설날/추석 (명절 귀성·귀경 효과)
+LUNAR_DATES = ["2016-02-08", "2017-01-28", "2018-02-16",   # 설날
+               "2016-09-15", "2017-10-04", "2018-09-24"]   # 추석
+
+
+def _daily_calendar(hol: set) -> pd.DataFrame:
+    """연휴길이·징검다리·명절시즌·성수기 (일 단위 파생)."""
+    dts = pd.date_range(WINDOW_START.normalize(), WINDOW_END.normalize(), freq="D")
+    dayoff = pd.Series([(d.dayofweek >= 5) or (d in hol) for d in dts], index=dts)
+    # 연속 휴무 블록 길이 (휴무일이면 그 블록 길이, 근무일이면 0)
+    run = pd.Series(0, index=dts)
+    block, length = [], 0
+    vals = dayoff.values
+    i = 0
+    while i < len(vals):
+        if vals[i]:
+            j = i
+            while j < len(vals) and vals[j]:
+                j += 1
+            run.iloc[i:j] = j - i
+            i = j
+        else:
+            i += 1
+    # 징검다리: 근무일인데 전·후가 모두 휴무
+    bridge = pd.Series(False, index=dts)
+    for k in range(1, len(vals) - 1):
+        if (not vals[k]) and vals[k - 1] and vals[k + 1]:
+            bridge.iloc[k] = True
+    lunar = {pd.Timestamp(x) for x in LUNAR_DATES}
+    lunar_season = pd.Series(
+        [any(abs((d - l).days) <= 3 for l in lunar) for d in dts], index=dts)
+    summer = pd.Series(
+        [(d.month == 7 and d.day >= 15) or (d.month == 8 and d.day <= 25) for d in dts],
+        index=dts)
+    return pd.DataFrame({
+        "dayoff_run": run, "is_bridge": bridge.astype(int),
+        "is_lunar_season": lunar_season.astype(int), "is_summer_peak": summer.astype(int),
+    })
+
+
 # ---------- 유형별 완전 시간 시계열 ----------
 def build_category_hourly() -> pd.DataFrame:
     hourly = pd.read_parquet(config.PROCESSED_DIR / "hourly.parquet")
@@ -99,6 +139,11 @@ def add_calendar(df: pd.DataFrame) -> pd.DataFrame:
     df["is_pre_holiday"] = (d + pd.Timedelta(days=1)).isin(hol).astype(int)
     df["is_post_holiday"] = (d - pd.Timedelta(days=1)).isin(hol).astype(int)
     df["is_dayoff"] = ((df["is_weekend"] == 1) | (df["is_holiday"] == 1)).astype(int)
+    # 고도화 달력 (연휴길이/징검다리/명절/성수기) — 일 단위 파생 후 결합
+    dc = _daily_calendar(hol)
+    key = df["datetime"].dt.normalize()
+    for col in dc.columns:
+        df[col] = key.map(dc[col]).astype(int)
     # 순환 인코딩
     df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
     df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)

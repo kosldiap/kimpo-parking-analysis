@@ -37,6 +37,7 @@ SPLIT = pd.Timestamp("2018-01-01")
 FEATURES = [
     "month", "day", "hour", "dow", "is_weekend", "quarter", "doy", "season",
     "is_holiday", "is_pre_holiday", "is_post_holiday", "is_dayoff",
+    "dayoff_run", "is_bridge", "is_lunar_season", "is_summer_peak",
     "hour_sin", "hour_cos", "dow_sin", "dow_cos", "month_sin", "month_cos",
     "lag_1", "lag_24", "lag_168", "roll_mean_24", "roll_mean_168", "roll_std_24",
 ]
