@@ -46,8 +46,12 @@ OPTIONAL_FEATURES = ["f_flights", "f_pax", "f_cargo",
                      "temp", "precip", "snow", "wind", "humidity", "vis"]
 
 
-def active_features(df) -> list:
-    return FEATURES + [c for c in OPTIONAL_FEATURES if c in df.columns]
+LAG_FEATURES = ["lag_1", "lag_24", "lag_168", "roll_mean_24", "roll_mean_168", "roll_std_24"]
+
+
+def active_features(df, use_lags: bool = True) -> list:
+    base = FEATURES if use_lags else [f for f in FEATURES if f not in LAG_FEATURES]
+    return base + [c for c in OPTIONAL_FEATURES if c in df.columns]
 
 
 def _models():
@@ -71,11 +75,12 @@ def _prep(df_cat: pd.DataFrame, feats: list):
     return train, test
 
 
-def run():
+def run(use_lags: bool = True):
     OUT.mkdir(parents=True, exist_ok=True)
     df = pd.read_parquet(config.PROCESSED_DIR / "features.parquet")
-    feats = active_features(df)
-    print("사용 특성:", len(feats), "개 |", [f for f in feats if f in OPTIONAL_FEATURES], "(외부)")
+    feats = active_features(df, use_lags=use_lags)
+    tag = "" if use_lags else "_structural"
+    print(f"[{'lag포함(운영)' if use_lags else 'lag제외(구조적/시나리오용)'}] 특성 {len(feats)}개")
     rows, preds, importances = [], [], {}
 
     for cat in config.CATEGORIES:
@@ -95,14 +100,15 @@ def run():
         preds.append(pr)
 
     table = metrics_table(rows)
-    table.to_csv(OUT / "metrics_ml.csv", index=False, encoding="utf-8-sig")
+    table.to_csv(OUT / f"metrics_ml{tag}.csv", index=False, encoding="utf-8-sig")
     pred_df = pd.concat(preds, ignore_index=True)
-    pred_df.to_parquet(config.PROCESSED_DIR / "predictions_ml.parquet", index=False)
+    pred_df.to_parquet(config.PROCESSED_DIR / f"predictions_ml{tag}.parquet", index=False)
 
-    _plot_pred(pred_df)
-    _plot_importance(importances)
+    if use_lags:
+        _plot_pred(pred_df)
+        _plot_importance(importances)
 
-    print("\n===== ML 모델 성능 비교 (2018 test) =====")
+    print(f"\n===== ML 성능 (2018 test, {'lag포함' if use_lags else '구조적'}) =====")
     print(table.to_string(index=False))
     print(f"\n산출물 → {OUT}")
 
@@ -133,4 +139,6 @@ def _plot_importance(importances):
 
 
 if __name__ == "__main__":
-    run()
+    # python src/model_ml.py             # lag포함(운영 단기예측)
+    # python src/model_ml.py structural  # lag제외(시나리오용 구조적 예측)
+    run(use_lags="structural" not in sys.argv)
