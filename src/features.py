@@ -124,11 +124,43 @@ def add_timeseries(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------- 외부 데이터(선택) ----------
+def merge_flights(df: pd.DataFrame) -> pd.DataFrame:
+    """일별 항공통계(flights_daily.csv)를 유형별로 결합.
+
+    파일: [date, dom_flights, dom_pax, dom_cargo, intl_flights, intl_pax, intl_cargo]
+    유형별 매핑(그날 김포 항공활동 → 해당 주차 수요 동인):
+      국내선: 국내선 운항/여객/화물
+      국제선: 국제선 운항/여객/화물
+      화물  : 전체 운항, 전체 화물톤
+      직원  : 전체 운항/여객/화물 (공항 전체 활동의 약한 대리변수)
+    """
+    fpath = EXTERNAL_DIR / "flights_daily.csv"
+    if not fpath.exists():
+        print(f"  [skip] 항공 파일 없음 → {fpath}")
+        return df
+    fd = pd.read_csv(fpath, parse_dates=["date"])
+    fd["date"] = fd["date"].dt.normalize()
+    tot_f = fd["dom_flights"] + fd["intl_flights"]
+    tot_p = fd["dom_pax"] + fd["intl_pax"]
+    tot_c = fd["dom_cargo"] + fd["intl_cargo"]
+    per_cat = {
+        "국내선": pd.DataFrame({"date": fd["date"], "f_flights": fd["dom_flights"], "f_pax": fd["dom_pax"], "f_cargo": fd["dom_cargo"]}),
+        "국제선": pd.DataFrame({"date": fd["date"], "f_flights": fd["intl_flights"], "f_pax": fd["intl_pax"], "f_cargo": fd["intl_cargo"]}),
+        "화물": pd.DataFrame({"date": fd["date"], "f_flights": tot_f, "f_pax": tot_p, "f_cargo": tot_c}),
+        "직원": pd.DataFrame({"date": fd["date"], "f_flights": tot_f, "f_pax": tot_p, "f_cargo": tot_c}),
+    }
+    flong = pd.concat([d.assign(category=c) for c, d in per_cat.items()], ignore_index=True)
+    df["date"] = df["datetime"].dt.normalize()
+    df = df.merge(flong, on=["date", "category"], how="left").drop(columns="date")
+    print(f"  항공 결합: {fpath.name} ({len(fd):,}일) → f_flights/f_pax/f_cargo")
+    return df
+
+
 def merge_external(df: pd.DataFrame) -> pd.DataFrame:
     """data/external/ 에 파일이 있으면 결합. 없으면 건너뜀.
 
     기상:  weather_hourly.csv  [datetime, temp, precip, snow, wind, humidity]
-    항공:  flights_hourly.csv  [datetime, category, arrivals, departures]
+    항공:  flights_daily.csv   [date, dom_*, intl_*]  (fetch_flights.py 생성)
     """
     wpath = EXTERNAL_DIR / "weather_hourly.csv"
     if wpath.exists():
@@ -137,14 +169,7 @@ def merge_external(df: pd.DataFrame) -> pd.DataFrame:
         print(f"  기상 결합: {wpath.name} ({len(w):,}행)")
     else:
         print(f"  [skip] 기상 파일 없음 → {wpath}")
-    fpath = EXTERNAL_DIR / "flights_hourly.csv"
-    if fpath.exists():
-        f = pd.read_csv(fpath, parse_dates=["datetime"])
-        keys = ["datetime", "category"] if "category" in f.columns else ["datetime"]
-        df = df.merge(f, on=keys, how="left")
-        print(f"  항공 결합: {fpath.name} ({len(f):,}행)")
-    else:
-        print(f"  [skip] 항공 파일 없음 → {fpath}")
+    df = merge_flights(df)
     return df
 
 

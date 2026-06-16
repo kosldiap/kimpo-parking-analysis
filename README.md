@@ -67,12 +67,13 @@ kimpo-parking-analysis/
 datetime,temp,precip,snow,wind,humidity
 2016-01-01 00:00,-3.2,0.0,0.0,2.1,68
 ```
-**항공 스케줄** — `flights_hourly.csv` (한국공항공사/항공정보포털 과거 운항실적)
+**항공 통계** — `flights_daily.csv` (항공정보포털 김포 일별, `src/fetch_flights.py`가 자동 수집)
 ```
-datetime,category,arrivals,departures
-2016-01-01 05:00,국내선,3,7
+date,dom_flights,dom_pax,dom_cargo,intl_flights,intl_pax,intl_cargo
+2018-01-02,304,47575,290,56,10278,141
 ```
-(`category`는 국내선/국제선/화물/직원. 없으면 datetime만으로 결합)
+유형별 매핑: 국내선←국내선 운항/여객/화물, 국제선←국제선, 화물←전체 화물톤, 직원←전체 항공활동.
+수집:  `python src/fetch_flights.py`  (2016~2018, 약 15분)
 
 ## 환경
 
