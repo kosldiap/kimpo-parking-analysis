@@ -55,8 +55,8 @@ def build_occupancy() -> pd.DataFrame:
 
 
 def practical_capacity(occ: pd.DataFrame) -> pd.Series:
-    """실측 최대점유의 상위분위로 실효 수용능력 추정 (공식 정원 미상이라 근사)."""
-    return occ.groupby("category")["occupancy"].quantile(0.995).round()
+    """실제 정원(KAC 시설현황). config.CAPACITY 사용."""
+    return pd.Series(config.CAPACITY).reindex(config.CATEGORIES)
 
 
 def plot(occ: pd.DataFrame, cap: pd.Series):
@@ -65,7 +65,7 @@ def plot(occ: pd.DataFrame, cap: pd.Series):
     for ax, c in zip(axes, lots):
         s = occ[occ["category"] == c].set_index("datetime")["occupancy"]
         ax.plot(s.index, s.values, lw=0.5, color="#2b6cb0")
-        ax.axhline(cap[c], color="#e53e3e", ls="--", lw=1, label=f"실효정원~{cap[c]:.0f}")
+        ax.axhline(cap[c], color="#e53e3e", ls="--", lw=1, label=f"정원={cap[c]:.0f}")
         ax.set_ylabel(c, rotation=0, ha="right", va="center")
         ax.legend(loc="upper left", fontsize=8); ax.grid(alpha=0.25)
     axes[0].set_title("유형별 동시주차대수(점유) 추이  (빨강=실효정원 근사, 상위0.5%)")
@@ -82,7 +82,8 @@ def main():
     print("\n== 유형별 점유 통계 (대) ==")
     g = occ.groupby("category")["occupancy"]
     summ = pd.DataFrame({"평균": g.mean().round(0), "중앙": g.median().round(0),
-                         "최대": g.max().round(0), "실효정원≈": cap})
+                         "최대": g.max().round(0), "정원": cap,
+                         "최대점유율%": (g.max() / cap * 100).round(0)})
     print(summ.reindex(config.CATEGORIES).to_string())
     # 만차 근접(>=95% 실효정원) 시간 비율
     print("\n== 혼잡(실효정원 95%↑) 시간 비율 ==")

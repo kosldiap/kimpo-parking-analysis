@@ -44,6 +44,7 @@ FEATURES = [
 
 # 외부 데이터가 결합돼 있으면 자동 포함
 OPTIONAL_FEATURES = ["f_flights", "f_pax", "f_cargo",
+                     "f_flights_h", "f_pax_h", "f_pax_lead2", "f_cargo_h",
                      "temp", "precip", "snow", "wind", "humidity", "vis"]
 
 

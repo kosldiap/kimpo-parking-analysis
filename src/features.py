@@ -204,6 +204,40 @@ def merge_flights(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def merge_hourly_flights(df: pd.DataFrame) -> pd.DataFrame:
+    """KAC 시간대별 항공 프로파일(월×시간) 결합. 유형별 매핑 + 2시간 선행 여객.
+
+    파일: flights_hourly_profile.csv [ym, line, hour, flights, pax, cargo_ton] (일평균)
+    주차가 항공편을 ~1-2h 선행 → f_pax_lead2 = 2시간 뒤 여객(그 시각 주차 유발).
+    """
+    fpath = EXTERNAL_DIR / "flights_hourly_profile.csv"
+    if not fpath.exists():
+        print(f"  [skip] 시간대 항공 프로파일 없음 → {fpath}")
+        return df
+    hp = pd.read_csv(fpath, dtype={"ym": int})
+
+    def _line(nm):
+        d = hp[hp["line"] == nm][["ym", "hour", "flights", "pax", "cargo_ton"]].sort_values(["ym", "hour"]).copy()
+        d["pax_lead2"] = d.groupby("ym")["pax"].shift(-2).fillna(0)
+        return d
+    dom, intl = _line("국내선"), _line("국제선")
+    tot = hp.groupby(["ym", "hour"], as_index=False).agg(
+        flights=("flights", "sum"), pax=("pax", "sum"), cargo_ton=("cargo_ton", "sum"))
+    tot["pax_lead2"] = tot.sort_values(["ym", "hour"]).groupby("ym")["pax"].shift(-2).fillna(0)
+
+    def _cat(d, cat):
+        return pd.DataFrame({"ym": d["ym"], "hour": d["hour"], "category": cat,
+                             "f_flights_h": d["flights"], "f_pax_h": d["pax"],
+                             "f_pax_lead2": d["pax_lead2"], "f_cargo_h": d["cargo_ton"]})
+    long = pd.concat([_cat(dom, "국내선"), _cat(intl, "국제선"),
+                      _cat(tot, "화물"), _cat(tot, "직원")], ignore_index=True)
+
+    df["ym"] = df["datetime"].dt.year * 100 + df["datetime"].dt.month
+    df = df.merge(long, on=["ym", "hour", "category"], how="left").drop(columns="ym")
+    print(f"  시간대 항공 결합: {fpath.name} → f_flights_h/f_pax_h/f_pax_lead2/f_cargo_h")
+    return df
+
+
 def merge_external(df: pd.DataFrame) -> pd.DataFrame:
     """data/external/ 에 파일이 있으면 결합. 없으면 건너뜀.
 
@@ -218,6 +252,7 @@ def merge_external(df: pd.DataFrame) -> pd.DataFrame:
     else:
         print(f"  [skip] 기상 파일 없음 → {wpath}")
     df = merge_flights(df)
+    df = merge_hourly_flights(df)
     return df
 
 
