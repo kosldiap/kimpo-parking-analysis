@@ -41,6 +41,14 @@ FEATURES = [
     "lag_1", "lag_24", "lag_168", "roll_mean_24", "roll_mean_168", "roll_std_24",
 ]
 
+# 외부 데이터가 결합돼 있으면 자동 포함
+OPTIONAL_FEATURES = ["f_flights", "f_pax", "f_cargo",
+                     "temp", "precip", "snow", "wind", "humidity", "vis"]
+
+
+def active_features(df) -> list:
+    return FEATURES + [c for c in OPTIONAL_FEATURES if c in df.columns]
+
 
 def _models():
     return {
@@ -56,8 +64,8 @@ def _models():
     }
 
 
-def _prep(df_cat: pd.DataFrame):
-    d = df_cat.dropna(subset=["target"] + FEATURES).copy()
+def _prep(df_cat: pd.DataFrame, feats: list):
+    d = df_cat.dropna(subset=["target"] + feats).copy()
     train = d[d["datetime"] < SPLIT]
     test = d[d["datetime"] >= SPLIT]
     return train, test
@@ -66,12 +74,14 @@ def _prep(df_cat: pd.DataFrame):
 def run():
     OUT.mkdir(parents=True, exist_ok=True)
     df = pd.read_parquet(config.PROCESSED_DIR / "features.parquet")
+    feats = active_features(df)
+    print("사용 특성:", len(feats), "개 |", [f for f in feats if f in OPTIONAL_FEATURES], "(외부)")
     rows, preds, importances = [], [], {}
 
     for cat in config.CATEGORIES:
-        train, test = _prep(df[df["category"] == cat])
-        Xtr, ytr = train[FEATURES], train["target"]
-        Xte, yte = test[FEATURES], test["target"]
+        train, test = _prep(df[df["category"] == cat], feats)
+        Xtr, ytr = train[feats], train["target"]
+        Xte, yte = test[feats], test["target"]
         print(f"\n[{cat}] train {len(train):,} / test {len(test):,}")
         pr = pd.DataFrame({"category": cat, "datetime": test["datetime"].values, "actual": yte.values})
         for name, model in _models().items():
@@ -81,7 +91,7 @@ def run():
             pr[name] = yp
             print(f"  {name:13} MAE={rows[-1]['MAE']:.2f}  WAPE={rows[-1]['WAPE']:.1f}%  R2={rows[-1]['R2']:.3f}")
             if name == "XGBoost":
-                importances[cat] = pd.Series(model.feature_importances_, index=FEATURES)
+                importances[cat] = pd.Series(model.feature_importances_, index=feats)
         preds.append(pr)
 
     table = metrics_table(rows)

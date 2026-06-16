@@ -140,6 +140,9 @@ def merge_flights(df: pd.DataFrame) -> pd.DataFrame:
         return df
     fd = pd.read_csv(fpath, parse_dates=["date"])
     fd["date"] = fd["date"].dt.normalize()
+    # 운항 0인 날 = 포털 데이터 공백 → 결측 처리
+    fd.loc[fd["dom_flights"] == 0, ["dom_flights", "dom_pax", "dom_cargo"]] = np.nan
+    fd.loc[fd["intl_flights"] == 0, ["intl_flights", "intl_pax", "intl_cargo"]] = np.nan
     tot_f = fd["dom_flights"] + fd["intl_flights"]
     tot_p = fd["dom_pax"] + fd["intl_pax"]
     tot_c = fd["dom_cargo"] + fd["intl_cargo"]
