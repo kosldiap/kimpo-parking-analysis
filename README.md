@@ -46,6 +46,34 @@ kimpo-parking-analysis/
 └── README.md
 ```
 
+## 분석 파이프라인 (src/)
+
+| 모듈 | 역할 |
+|---|---|
+| `config.py` | 경로, 주차장 정규화, 4유형 매핑, 데이터 상수 |
+| `etl.py` | .xls 공통 리더 (포맷차이·멀티시트·날짜혼재 흡수) |
+| `aggregate.py` | 전 파일 → 트랜잭션 마스터 + 일별/시간별 집계 (중복제거·구간필터) |
+| `eda.py` | 탐색 시각화 7종 (output/) |
+| `features.py` | 4유형 시간당 특성행렬 (달력·공휴일·lag/rolling·외부join) |
+
+**모델링 대상**: 시간당 입차대수(target), 4유형(국내선/국제선/화물/직원).
+
+## 외부 데이터 (선택, `data/external/`)
+
+아래 파일을 두면 `features.py`가 자동 결합합니다 (없으면 건너뜀).
+
+**기상** — `weather_hourly.csv` (기상청 ASOS 김포/서울 과거 시간자료)
+```
+datetime,temp,precip,snow,wind,humidity
+2016-01-01 00:00,-3.2,0.0,0.0,2.1,68
+```
+**항공 스케줄** — `flights_hourly.csv` (한국공항공사/항공정보포털 과거 운항실적)
+```
+datetime,category,arrivals,departures
+2016-01-01 05:00,국내선,3,7
+```
+(`category`는 국내선/국제선/화물/직원. 없으면 datetime만으로 결합)
+
 ## 환경
 
 - Python 3.x
