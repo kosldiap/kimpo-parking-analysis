@@ -50,6 +50,31 @@ YEAR_DIRS = {
     2018: DATA_DIR / "2018년",
 }
 
+# 집계 산출물 저장 위치 (프로젝트 내부, git 제외 — data/ 는 .gitignore됨)
+PROCESSED_DIR = Path(__file__).resolve().parent.parent / "data" / "processed"
+
+# 표준 주차장 키 (원본 주차장명 표기가 제각각이라 정규화)
+PARKING_LOTS = ["국내선1", "국내선2", "국제선", "화물청사", "국제선버스", "항공지원센터"]
+
+
+def normalize_lot(name) -> str:
+    """원본 주차장명 -> 표준 키. 매칭 안되면 원본 반환."""
+    s = str(name)
+    if "항공지원" in s:
+        return "항공지원센터"
+    if "버스" in s:
+        return "국제선버스"
+    if "화물" in s:
+        return "화물청사"
+    if "국제선" in s:
+        return "국제선"
+    if "국내선" in s:
+        if "2" in s or "제2" in s:
+            return "국내선2"
+        if "1" in s or "제1" in s:
+            return "국내선1"
+    return s
+
 # ===== 데이터 주의사항 (참고사항.hwp 기준) =====
 
 # 통계 작성 시 반드시 제외할 주차권번호 (출차완료 차량 재출차 허수 내역)

@@ -63,15 +63,23 @@ def _col_index(header_cells: list[str]) -> dict[str, int]:
     return idx
 
 
-def _to_datetime(value, datemode):
-    if value in ("", None):
-        return pd.NaT
-    if isinstance(value, (int, float)):
-        try:
-            return pd.Timestamp(xlrd.xldate.xldate_as_datetime(value, datemode))
-        except Exception:
-            return pd.NaT
-    return pd.to_datetime(str(value).strip(), errors="coerce")
+def _excel_origin(datemode):
+    # datemode 0 = 1900 날짜시스템(엑셀 기본), 1 = 1904(맥)
+    return "1904-01-01" if datemode == 1 else "1899-12-30"
+
+
+def _convert_datetime_col(series: pd.Series, datemode) -> pd.Series:
+    """컬럼 단위 벡터화 변환. Excel 시리얼(float) / 문자열 양쪽 처리."""
+    origin = _excel_origin(datemode)
+    if pd.api.types.is_numeric_dtype(series):
+        out = pd.to_datetime(series, unit="D", origin=origin, errors="coerce")
+        return out.dt.round("s")  # 시리얼 변환 부동소수점 노이즈 제거
+    # object 컬럼: 시리얼이 문자열로 섞였는지 먼저 시도
+    num = pd.to_numeric(series, errors="coerce")
+    if num.notna().mean() > 0.5:
+        out = pd.to_datetime(num, unit="D", origin=origin, errors="coerce")
+        return out.dt.round("s")
+    return pd.to_datetime(series.astype(str).str.strip(), errors="coerce")
 
 
 def _duration_to_min(value):
@@ -123,10 +131,10 @@ def read_parking_xls(path) -> pd.DataFrame:
 
     df = pd.concat(frames, ignore_index=True)
 
-    # 날짜 파싱
+    # 날짜 파싱 (컬럼 단위 벡터화)
     for col in ("입차일시", "출차일시", "정산일시"):
         if col in df:
-            df[col] = df[col].apply(lambda v: _to_datetime(v, datemode))
+            df[col] = _convert_datetime_col(df[col], datemode)
 
     # 파생/수치
     if "주차시간" in df:
